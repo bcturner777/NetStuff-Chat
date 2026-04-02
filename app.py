@@ -17,10 +17,15 @@ app = Flask(__name__)
 MODEL = "claude-haiku-4-5-20251001"
 MAX_TOKENS = 4096
 
-# Build CML Basic auth header from env vars (required in HTTP transport mode)
+# Build CML auth headers from env vars (required in HTTP transport mode)
 _cml_user = os.getenv("CML_USERNAME", "")
 _cml_pass = os.getenv("CML_PASSWORD", "")
 _cml_auth = base64.b64encode(f"{_cml_user}:{_cml_pass}".encode()).decode()
+
+_pyats_user = os.getenv("PYATS_USERNAME", "")
+_pyats_pass = os.getenv("PYATS_PASSWORD", "")
+_pyats_auth = base64.b64encode(f"{_pyats_user}:{_pyats_pass}".encode()).decode()
+_pyats_enable = base64.b64encode(os.getenv("PYATS_AUTH_PASS", "").encode()).decode()
 
 MCP_SERVERS = [
     {"name": "NetBox", "url": os.getenv("MCP_URL_NETBOX", "http://127.0.0.1:8000/mcp")},
@@ -28,7 +33,11 @@ MCP_SERVERS = [
     {
         "name": "CML",
         "url": os.getenv("MCP_URL_CML", "http://127.0.0.1:8002/mcp"),
-        "headers": {"X-Authorization": f"Basic {_cml_auth}"},
+        "headers": {
+            "X-Authorization": f"Basic {_cml_auth}",
+            "X-PyATS-Authorization": f"Basic {_pyats_auth}",
+            "X-PyATS-Enable": _pyats_enable,
+        },
     },
 ]
 

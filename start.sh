@@ -26,6 +26,11 @@ if [ -z "$CML_URL" ] || [ -z "$CML_USERNAME" ] || [ -z "$CML_PASSWORD" ]; then
     exit 1
 fi
 
+if [ -z "$PYATS_USERNAME" ] || [ -z "$PYATS_PASSWORD" ]; then
+    echo "Error: PYATS_USERNAME and PYATS_PASSWORD must be set in .env or environment"
+    exit 1
+fi
+
 if [ -z "$ANTHROPIC_API_KEY" ]; then
     echo "Error: ANTHROPIC_API_KEY must be set in .env or environment"
     exit 1
