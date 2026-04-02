@@ -57,7 +57,7 @@ NETBOX_MCP_PID=$!
 
 # Start Meraki MCP server in background (HTTP transport on port 8001)
 echo "Starting Meraki MCP server on http://127.0.0.1:8001/mcp ..."
-MCP_TRANSPORT=http MCP_HOST=127.0.0.1 MCP_PORT=8001 REQUESTS_CA_BUNDLE=/etc/ssl/cert.pem \
+MCP_TRANSPORT=http MCP_HOST=127.0.0.1 MCP_PORT=8001 \
     uv --directory "$SCRIPT_DIR/meraki-mcp-server" run python meraki-mcp-dynamic.py &
 MERAKI_MCP_PID=$!
 
