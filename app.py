@@ -4,6 +4,7 @@ import json
 import os
 
 import anthropic
+import httpx
 from dotenv import load_dotenv
 from flask import Flask, Response, render_template, request
 from mcp.client.session import ClientSession
@@ -90,7 +91,8 @@ async def discover_tools():
     server_map = {}
     for server in MCP_SERVERS:
         try:
-            async with streamable_http_client(server["url"], headers=server.get("headers")) as (read, write, _):
+            http_client = httpx.AsyncClient(headers=server["headers"]) if server.get("headers") else None
+            async with streamable_http_client(server["url"], http_client=http_client) as (read, write, _):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
                     result = await session.list_tools()
@@ -231,7 +233,8 @@ async def execute_tool(name, arguments):
     if not server_url:
         return f"Error: unknown tool '{name}' — not found on any MCP server"
     server_headers = next((s.get("headers") for s in MCP_SERVERS if s["url"] == server_url), None)
-    async with streamable_http_client(server_url, headers=server_headers) as (read, write, _):
+    http_client = httpx.AsyncClient(headers=server_headers) if server_headers else None
+    async with streamable_http_client(server_url, http_client=http_client) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
             result = await session.call_tool(name, arguments)
