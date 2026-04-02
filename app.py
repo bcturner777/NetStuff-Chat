@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 import os
 
@@ -14,17 +15,29 @@ app = Flask(__name__)
 
 MODEL = "claude-haiku-4-5-20251001"
 MAX_TOKENS = 4096
+
+# Build CML Basic auth header from env vars (required in HTTP transport mode)
+_cml_user = os.getenv("CML_USERNAME", "")
+_cml_pass = os.getenv("CML_PASSWORD", "")
+_cml_auth = base64.b64encode(f"{_cml_user}:{_cml_pass}".encode()).decode()
+
 MCP_SERVERS = [
     {"name": "NetBox", "url": os.getenv("MCP_URL_NETBOX", "http://127.0.0.1:8000/mcp")},
     {"name": "Meraki", "url": os.getenv("MCP_URL_MERAKI", "http://127.0.0.1:8001/mcp")},
+    {
+        "name": "CML",
+        "url": os.getenv("MCP_URL_CML", "http://127.0.0.1:8002/mcp"),
+        "headers": {"X-Authorization": f"Basic {_cml_auth}"},
+    },
 ]
 
 client = anthropic.Anthropic()
 
 SYSTEM_PROMPT = (
-    "You are a helpful network assistant. You have tools that query live NetBox and "
-    "Cisco Meraki systems. When the user asks about network infrastructure, call the "
-    "appropriate tool, wait for the result, and then present the returned data in a clear summary. "
+    "You are a helpful network assistant. You have tools that query live NetBox, "
+    "Cisco Meraki, and Cisco Modeling Labs (CML) systems. When the user asks about "
+    "network infrastructure, call the appropriate tool, wait for the result, and then "
+    "present the returned data in a clear summary. "
     "Never explain how to use the API. Never write code. Never make up data. "
     "If a tool returns an error, tell the user what went wrong — do NOT guess or fabricate results. "
     "\n\n"
@@ -40,7 +53,14 @@ SYSTEM_PROMPT = (
     "getNetworkClients (requires networkId), getNetworkDevices (requires networkId), "
     "getNetworkWirelessSsids (requires networkId), getDeviceSwitchPorts (requires serial). "
     "For any endpoint not covered by a dedicated tool, use call_meraki_api with a section, method, and parameters. "
-    "When a tool requires a networkId, first call getOrganizationNetworks to get the list of networks."
+    "When a tool requires a networkId, first call getOrganizationNetworks to get the list of networks. "
+    "\n\n"
+    "CML tools (cml_* or get_cml_* etc.): "
+    "Use these tools to interact with Cisco Modeling Labs. Common operations include: "
+    "get_cml_labs (list all labs), get_cml_information and get_cml_status (server info), "
+    "get_nodes_for_cml_lab (requires lab_id), get_all_links_for_lab (requires lab_id), "
+    "start_cml_lab / stop_cml_lab (requires lab_id), send_cli_command (requires lab_id and node_id). "
+    "Always call get_cml_labs first when you need a lab_id."
 )
 
 # Global store for MCP tools in Anthropic format
@@ -70,7 +90,7 @@ async def discover_tools():
     server_map = {}
     for server in MCP_SERVERS:
         try:
-            async with streamable_http_client(server["url"]) as (read, write, _):
+            async with streamable_http_client(server["url"], headers=server.get("headers")) as (read, write, _):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
                     result = await session.list_tools()
@@ -210,7 +230,8 @@ async def execute_tool(name, arguments):
     server_url = tool_server_map.get(name)
     if not server_url:
         return f"Error: unknown tool '{name}' — not found on any MCP server"
-    async with streamable_http_client(server_url) as (read, write, _):
+    server_headers = next((s.get("headers") for s in MCP_SERVERS if s["url"] == server_url), None)
+    async with streamable_http_client(server_url, headers=server_headers) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
             result = await session.call_tool(name, arguments)
