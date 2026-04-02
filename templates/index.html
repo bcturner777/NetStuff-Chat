@@ -179,13 +179,21 @@
             color: #555;
             font-size: 16px;
         }
+
+        .token-usage {
+            align-self: flex-start;
+            font-size: 11px;
+            color: #4a5568;
+            padding: 2px 8px;
+            margin-top: -8px;
+        }
     </style>
 </head>
 <body>
     <header>
         <div class="header-text">
             <h1>NetStuff Chat</h1>
-            <span class="header-subtitle">Interact with your Network Resources using Natural Language! Current resources are NetBox and Meraki</span>
+            <span class="header-subtitle">Interact with your Network Resources using Natural Language! Current resources are NetBox, Meraki, and CML</span>
         </div>
         <button id="new-chat-btn">New Chat</button>
     </header>
@@ -279,7 +287,14 @@
                                 assistantDiv.textContent = `Error: ${data.error}`;
                                 break;
                             }
-                            if (data.type === "clear") {
+                            if (data.type === "usage") {
+                                const usageDiv = document.createElement("div");
+                                usageDiv.className = "token-usage";
+                                const roundsNote = data.rounds > 0 ? `, ${data.rounds} tool round${data.rounds !== 1 ? "s" : ""}` : "";
+                                usageDiv.textContent = `↳ ${data.total.toLocaleString()} tokens (in: ${data.input.toLocaleString()}, out: ${data.output.toLocaleString()}${roundsNote})`;
+                                chatContainer.appendChild(usageDiv);
+                                scrollToBottom();
+                            } else if (data.type === "clear") {
                                 // Server detected a raw JSON tool call — clear it
                                 fullResponse = "";
                                 if (assistantDiv) {

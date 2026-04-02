@@ -287,7 +287,10 @@ def chat():
 
     def generate():
         try:
-            MAX_TOOL_ROUNDS = 20  # Safety limit for agentic loops
+            MAX_TOOL_ROUNDS = 10  # Safety limit for agentic loops
+            total_input_tokens = 0
+            total_output_tokens = 0
+            tool_rounds = 0
 
             for _ in range(MAX_TOOL_ROUNDS):
                 with client.messages.stream(
@@ -300,6 +303,9 @@ def chat():
                     for text in stream.text_stream:
                         yield f"data: {json.dumps({'type': 'token', 'token': text})}\n\n"
                     response = stream.get_final_message()
+
+                total_input_tokens += response.usage.input_tokens
+                total_output_tokens += response.usage.output_tokens
 
                 tool_use_blocks = [
                     block for block in response.content if block.type == "tool_use"
@@ -323,6 +329,7 @@ def chat():
                             result = f"TOOL ERROR — do NOT make up data. Report this error to the user: {e}"
                         messages.append({"role": "assistant", "content": full_text})
                         messages.append({"role": "user", "content": result})
+                        tool_rounds += 1
                         continue  # Loop back for next Claude response
 
                     break  # No tool calls — we're done
@@ -347,8 +354,18 @@ def chat():
                     })
 
                 messages.append({"role": "user", "content": tool_results})
+                tool_rounds += 1
                 # Loop back — Claude may need to make more tool calls
 
+            # Log and emit token usage summary
+            total_tokens = total_input_tokens + total_output_tokens
+            print(
+                f"Token usage — input: {total_input_tokens}, "
+                f"output: {total_output_tokens}, "
+                f"total: {total_tokens}, "
+                f"tool rounds: {tool_rounds}"
+            )
+            yield f"data: {json.dumps({'type': 'usage', 'input': total_input_tokens, 'output': total_output_tokens, 'total': total_tokens, 'rounds': tool_rounds})}\n\n"
             yield "data: [DONE]\n\n"
         except anthropic.APIError as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
