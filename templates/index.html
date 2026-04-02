@@ -187,6 +187,22 @@
             padding: 2px 8px;
             margin-top: -8px;
         }
+
+        #token-counter {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 2px;
+            font-size: 11px;
+            color: #7a8ba6;
+            white-space: nowrap;
+        }
+
+        #token-counter .token-total {
+            color: #4fc3f7;
+            font-weight: 600;
+            font-size: 13px;
+        }
     </style>
 </head>
 <body>
@@ -194,6 +210,10 @@
         <div class="header-text">
             <h1>NetStuff Chat</h1>
             <span class="header-subtitle">Interact with your Network Resources using Natural Language! Current resources are NetBox, Meraki, and CML</span>
+        </div>
+        <div id="token-counter" title="Session token usage">
+            <span class="token-total">0 tokens</span>
+            <span id="token-detail">in: 0 &nbsp;out: 0</span>
         </div>
         <button id="new-chat-btn">New Chat</button>
     </header>
@@ -216,6 +236,18 @@
 
         let history = [];
         let sending = false;
+        let sessionInputTokens = 0;
+        let sessionOutputTokens = 0;
+
+        function updateTokenCounter(inputDelta, outputDelta) {
+            sessionInputTokens += inputDelta;
+            sessionOutputTokens += outputDelta;
+            const total = sessionInputTokens + sessionOutputTokens;
+            document.querySelector("#token-counter .token-total").textContent =
+                total.toLocaleString() + " tokens";
+            document.getElementById("token-detail").innerHTML =
+                `in: ${sessionInputTokens.toLocaleString()} &nbsp;out: ${sessionOutputTokens.toLocaleString()}`;
+        }
 
         function scrollToBottom() {
             chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -288,12 +320,7 @@
                                 break;
                             }
                             if (data.type === "usage") {
-                                const usageDiv = document.createElement("div");
-                                usageDiv.className = "token-usage";
-                                const roundsNote = data.rounds > 0 ? `, ${data.rounds} tool round${data.rounds !== 1 ? "s" : ""}` : "";
-                                usageDiv.textContent = `↳ ${data.total.toLocaleString()} tokens (in: ${data.input.toLocaleString()}, out: ${data.output.toLocaleString()}${roundsNote})`;
-                                chatContainer.appendChild(usageDiv);
-                                scrollToBottom();
+                                updateTokenCounter(data.input, data.output);
                             } else if (data.type === "clear") {
                                 // Server detected a raw JSON tool call — clear it
                                 fullResponse = "";
@@ -361,6 +388,9 @@
 
         newChatBtn.addEventListener("click", () => {
             history = [];
+            sessionInputTokens = 0;
+            sessionOutputTokens = 0;
+            updateTokenCounter(0, 0);
             chatContainer.innerHTML = '<div class="empty-state" id="empty-state">Send a message to start chatting</div>';
             messageInput.focus();
         });
