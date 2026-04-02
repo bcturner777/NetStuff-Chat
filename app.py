@@ -287,96 +287,67 @@ def chat():
 
     def generate():
         try:
-            # Stream first response (may include tool calls)
-            with client.messages.stream(
-                model=MODEL,
-                max_tokens=MAX_TOKENS,
-                system=SYSTEM_PROMPT,
-                messages=messages,
-                tools=anthropic_tools or [],
-            ) as stream:
-                for text in stream.text_stream:
-                    yield f"data: {json.dumps({'type': 'token', 'token': text})}\n\n"
-                response = stream.get_final_message()
+            MAX_TOOL_ROUNDS = 20  # Safety limit for agentic loops
 
-            # Check for tool use
-            tool_use_blocks = [
-                block for block in response.content
-                if block.type == "tool_use"
-            ]
-
-            # Fallback: if the model emitted a raw JSON tool call as text,
-            # parse it and treat it as a real tool call
-            if not tool_use_blocks:
-                full_text = "".join(
-                    block.text for block in response.content if block.type == "text"
-                )
-                parsed = parse_text_tool_call(full_text)
-                if parsed:
-                    tool_name, tool_args = parsed
-                    # Clear the streamed text — it was a tool call, not a response
-                    yield f"data: {json.dumps({'type': 'clear'})}\n\n"
-
-                    yield f"data: {json.dumps({'type': 'status', 'content': f'Calling {tool_name}...'})}\n\n"
-                    try:
-                        result = asyncio.run(execute_tool(tool_name, tool_args))
-                        if result.startswith("Error"):
-                            result = f"TOOL ERROR — do NOT make up data. Report this error to the user: {result}"
-                    except Exception as e:
-                        result = f"TOOL ERROR — do NOT make up data. Report this error to the user: {e}"
-
-                    messages.append({"role": "assistant", "content": full_text})
-                    messages.append({"role": "user", "content": result})
-
-                    # Second call with tool result — stream final answer
-                    with client.messages.stream(
-                        model=MODEL,
-                        max_tokens=MAX_TOKENS,
-                        system=SYSTEM_PROMPT,
-                        messages=messages,
-                        tools=anthropic_tools or [],
-                    ) as stream2:
-                        for text in stream2.text_stream:
-                            yield f"data: {json.dumps({'type': 'token', 'token': text})}\n\n"
-
-            if tool_use_blocks:
-                # Add assistant's full response (text + tool_use blocks)
-                messages.append({"role": "assistant", "content": response.content})
-
-                # Execute each tool and collect results
-                tool_results = []
-                for block in tool_use_blocks:
-                    tool_name = block.name
-                    tool_args = block.input
-
-                    yield f"data: {json.dumps({'type': 'status', 'content': f'Calling {tool_name}...'})}\n\n"
-
-                    try:
-                        result = asyncio.run(execute_tool(tool_name, tool_args))
-                        if result.startswith("Error"):
-                            result = f"TOOL ERROR — do NOT make up data. Report this error to the user: {result}"
-                    except Exception as e:
-                        result = f"TOOL ERROR — do NOT make up data. Report this error to the user: {e}"
-
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": result,
-                    })
-
-                # Add tool results as a user message
-                messages.append({"role": "user", "content": tool_results})
-
-                # Second call with tool results — stream final answer
+            for _ in range(MAX_TOOL_ROUNDS):
                 with client.messages.stream(
                     model=MODEL,
                     max_tokens=MAX_TOKENS,
                     system=SYSTEM_PROMPT,
                     messages=messages,
                     tools=anthropic_tools or [],
-                ) as stream2:
-                    for text in stream2.text_stream:
+                ) as stream:
+                    for text in stream.text_stream:
                         yield f"data: {json.dumps({'type': 'token', 'token': text})}\n\n"
+                    response = stream.get_final_message()
+
+                tool_use_blocks = [
+                    block for block in response.content if block.type == "tool_use"
+                ]
+
+                # Fallback: model emitted a raw JSON tool call as text
+                if not tool_use_blocks:
+                    full_text = "".join(
+                        block.text for block in response.content if block.type == "text"
+                    )
+                    parsed = parse_text_tool_call(full_text)
+                    if parsed:
+                        tool_name, tool_args = parsed
+                        yield f"data: {json.dumps({'type': 'clear'})}\n\n"
+                        yield f"data: {json.dumps({'type': 'status', 'content': f'Calling {tool_name}...'})}\n\n"
+                        try:
+                            result = asyncio.run(execute_tool(tool_name, tool_args))
+                            if result.startswith("Error"):
+                                result = f"TOOL ERROR — do NOT make up data. Report this error to the user: {result}"
+                        except Exception as e:
+                            result = f"TOOL ERROR — do NOT make up data. Report this error to the user: {e}"
+                        messages.append({"role": "assistant", "content": full_text})
+                        messages.append({"role": "user", "content": result})
+                        continue  # Loop back for next Claude response
+
+                    break  # No tool calls — we're done
+
+                # Add assistant's full response (text + tool_use blocks)
+                messages.append({"role": "assistant", "content": response.content})
+
+                # Execute each tool and collect results
+                tool_results = []
+                for block in tool_use_blocks:
+                    yield f"data: {json.dumps({'type': 'status', 'content': f'Calling {block.name}...'})}\n\n"
+                    try:
+                        result = asyncio.run(execute_tool(block.name, block.input))
+                        if result.startswith("Error"):
+                            result = f"TOOL ERROR — do NOT make up data. Report this error to the user: {result}"
+                    except Exception as e:
+                        result = f"TOOL ERROR — do NOT make up data. Report this error to the user: {e}"
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": result,
+                    })
+
+                messages.append({"role": "user", "content": tool_results})
+                # Loop back — Claude may need to make more tool calls
 
             yield "data: [DONE]\n\n"
         except anthropic.APIError as e:
