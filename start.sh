@@ -51,8 +51,8 @@ trap cleanup INT TERM
 
 # Start NetBox MCP server in background (HTTP transport on port 8000)
 echo "Starting NetBox MCP server on http://127.0.0.1:8000/mcp ..."
-TRANSPORT=http HOST=127.0.0.1 PORT=8000 VERIFY_SSL=false \
-    uv --directory "$SCRIPT_DIR/netbox-mcp-server" run netbox-mcp-server &
+TRANSPORT=http HOST=127.0.0.1 PORT=8000 \
+    uv --directory "$SCRIPT_DIR/netbox-mcp-server" run netbox-mcp-server --no-verify-ssl &
 NETBOX_MCP_PID=$!
 
 # Start Meraki MCP server in background (HTTP transport on port 8001)
