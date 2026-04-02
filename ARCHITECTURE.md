@@ -1,11 +1,11 @@
-# AI-Fun Architecture
+# NetStuff-Chat Architecture
 
 ## System Overview
 
-AI-Fun is an agentic chat application that connects Claude (via the Anthropic API) to live network infrastructure data via the Model Context Protocol (MCP). Claude acts as an autonomous agent — it decides when to query NetBox or Meraki, formulates the right API call, and summarizes the results for the user.
+NetStuff-Chat is an agentic chat application that connects Claude (via the Anthropic API) to live network infrastructure data via the Model Context Protocol (MCP). Claude acts as an autonomous agent — it decides when to query NetBox or Meraki, formulates the right API call, and summarizes the results for the user.
 
 ```
-                         AI-Fun Application
+                         NetStuff-Chat Application
  ┌─────────────────────────────────────────────────────────────────┐
  │                                                                 │
  │   ┌──────────┐       ┌───────────────┐       ┌──────────────┐   │

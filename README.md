@@ -1,4 +1,4 @@
-# AI-Fun
+# NetStuff-Chat
 
 A local AI chat app powered by [Claude Haiku 4.5](https://www.anthropic.com/) (Anthropic API), with [NetBox](https://netboxlabs.com/) and [Cisco Meraki](https://meraki.cisco.com/) integration via the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/). Ask questions about your network infrastructure directly in the chat and get live answers from your NetBox inventory and Meraki dashboard.
 
