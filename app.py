@@ -100,20 +100,20 @@ async def discover_tools():
     server_map = {}
     for server in MCP_SERVERS:
         try:
-            http_client = httpx.AsyncClient(headers=server["headers"]) if server.get("headers") else None
-            async with streamable_http_client(server["url"], http_client=http_client) as (read, write, _):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    result = await session.list_tools()
-                    for tool in result.tools:
-                        tools.append({
-                            "name": tool.name,
-                            "description": tool.description or "",
-                            "input_schema": tool.inputSchema,
-                        })
-                        names[tool.name] = tool.description or tool.name
-                        server_map[tool.name] = server["url"]
-                    print(f"  {server['name']}: discovered {len(result.tools)} tools")
+            async with httpx.AsyncClient(headers=server.get("headers") or {}) as http_client:
+                async with streamable_http_client(server["url"], http_client=http_client) as (read, write, _):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        result = await session.list_tools()
+                        for tool in result.tools:
+                            tools.append({
+                                "name": tool.name,
+                                "description": tool.description or "",
+                                "input_schema": tool.inputSchema,
+                            })
+                            names[tool.name] = tool.description or tool.name
+                            server_map[tool.name] = server["url"]
+                        print(f"  {server['name']}: discovered {len(result.tools)} tools")
         except Exception as e:
             print(f"  Warning: Could not connect to {server['name']} MCP server at {server['url']}: {e}")
     return tools, names, server_map
@@ -242,16 +242,16 @@ async def execute_tool(name, arguments):
     if not server_url:
         return f"Error: unknown tool '{name}' — not found on any MCP server"
     server_headers = next((s.get("headers") for s in MCP_SERVERS if s["url"] == server_url), None)
-    http_client = httpx.AsyncClient(headers=server_headers) if server_headers else None
-    async with streamable_http_client(server_url, http_client=http_client) as (read, write, _):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            result = await session.call_tool(name, arguments)
-            texts = []
-            for content in result.content:
-                if hasattr(content, "text"):
-                    texts.append(content.text)
-            return "\n".join(texts) if texts else str(result)
+    async with httpx.AsyncClient(headers=server_headers or {}) as http_client:
+        async with streamable_http_client(server_url, http_client=http_client) as (read, write, _):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                result = await session.call_tool(name, arguments)
+                texts = []
+                for content in result.content:
+                    if hasattr(content, "text"):
+                        texts.append(content.text)
+                return "\n".join(texts) if texts else str(result)
 
 
 def parse_text_tool_call(text):
